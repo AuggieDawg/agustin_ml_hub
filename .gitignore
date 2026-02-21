@@ -1,0 +1,31 @@
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env / secrets (DO NOT COMMIT)
+.env
+.env.*
+!.env.example
+
+# Prisma (adjust if you store db elsewhere)
+prisma/*.db
+prisma/*.db-journal
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Python/Jupyter (if any appear)
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
