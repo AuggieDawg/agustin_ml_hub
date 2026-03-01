@@ -4,15 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import HeroScene from "@/components/home/HeroScene";
 
-/**
- * components/home/LandingHero.tsx
- *
- * - Black space background (page-level)
- * - Real 3D scene behind content
- * - Content uses a glass panel (dark glass) so text reads over the stars
- * - Buttons remain: Sign In, Portal, Owner
- */
-
 type Feature = { title: string; subtitle: string };
 
 const FEATURES: Feature[] = [
@@ -42,7 +33,6 @@ export default function LandingHero() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Neon-ish ink colors that read well on black
   const ink = "#cfe0ff";
   const inkSoft = "rgba(207, 224, 255, 0.72)";
   const accent = "rgba(80, 160, 255, 0.95)";
@@ -58,17 +48,16 @@ export default function LandingHero() {
           "radial-gradient(1000px 700px at 30% 25%, rgba(74, 86, 255, 0.14), rgba(0,0,0,0)), #000000",
       }}
     >
-      {/* 3D background */}
       <HeroScene scrollK={scrollK} />
 
-      {/* Optional: very subtle dark overlay to unify contrast */}
       <div
         aria-hidden
         style={{
           position: "absolute",
           inset: 0,
           zIndex: 1,
-          background: "linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.28) 60%, rgba(0,0,0,0.45) 100%)",
+          background:
+            "linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.28) 60%, rgba(0,0,0,0.45) 100%)",
         }}
       />
 
@@ -97,19 +86,28 @@ export default function LandingHero() {
           >
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div
-                aria-hidden
                 style={{
                   width: 28,
                   height: 28,
                   borderRadius: 10,
-                  background: "linear-gradient(135deg, rgba(80,160,255,0.95), rgba(40,214,164,0.75))",
+                  background:
+                    "linear-gradient(135deg, rgba(80,160,255,0.95), rgba(40,214,164,0.75))",
                   boxShadow: "0 12px 26px rgba(80,160,255,0.25)",
                 }}
               />
-              <div style={{ fontWeight: 950, letterSpacing: 0.2, color: ink }}>ML Hub</div>
+              <div style={{ fontWeight: 950, letterSpacing: 0.2, color: ink }}>
+                ML Hub
+              </div>
             </div>
 
-            <div style={{ display: "flex", gap: 16, fontWeight: 750, color: "rgba(207,224,255,0.55)" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 16,
+                fontWeight: 750,
+                color: "rgba(207,224,255,0.55)",
+              }}
+            >
               <span>Dashboard</span>
               <span>Reports</span>
               <span>Assets</span>
@@ -148,12 +146,28 @@ export default function LandingHero() {
               </Link>
 
               <Link
+                href="/workbench"
+                style={{
+                  textDecoration: "none",
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  background: "rgba(255,255,255,0.06)",
+                  border: `1px solid ${border}`,
+                  color: ink,
+                  fontWeight: 900,
+                }}
+              >
+                Workbench
+              </Link>
+
+              <Link
                 href="/owner"
                 style={{
                   textDecoration: "none",
                   padding: "10px 12px",
                   borderRadius: 12,
-                  background: "linear-gradient(135deg, rgba(80,160,255,0.95), rgba(40,214,164,0.80))",
+                  background:
+                    "linear-gradient(135deg, rgba(80,160,255,0.95), rgba(40,214,164,0.80))",
                   border: "1px solid rgba(80,160,255,0.18)",
                   color: "#001018",
                   fontWeight: 950,
@@ -166,7 +180,7 @@ export default function LandingHero() {
           </div>
         </div>
 
-        {/* Hero content */}
+        {/* Hero */}
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "56px 18px" }}>
           <div
             style={{
@@ -178,17 +192,40 @@ export default function LandingHero() {
               maxWidth: 780,
             }}
           >
-            <div style={{ fontSize: 56, lineHeight: 1.02, fontWeight: 1000, letterSpacing: -0.6, color: ink }}>
+            <div
+              style={{
+                fontSize: 56,
+                lineHeight: 1.02,
+                fontWeight: 1000,
+                letterSpacing: -0.6,
+                color: ink,
+              }}
+            >
               Optimize & Protect
               <br />
               Your IT Environment
             </div>
 
-            <div style={{ marginTop: 14, fontSize: 16, lineHeight: 1.55, color: inkSoft, fontWeight: 650 }}>
-              Sleek 3D hero (glass cube + gradient rings + starfield) built on your existing auth, database, and ML tools.
+            <div
+              style={{
+                marginTop: 14,
+                fontSize: 16,
+                lineHeight: 1.55,
+                color: inkSoft,
+                fontWeight: 650,
+              }}
+            >
+              Sleek 3D hero built on your existing auth, database, and ML stack.
             </div>
 
-            <div style={{ marginTop: 18, display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <div
+              style={{
+                marginTop: 18,
+                display: "flex",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
               <Link
                 href="/api/auth/signin"
                 style={{
@@ -202,6 +239,21 @@ export default function LandingHero() {
                 }}
               >
                 Get Started
+              </Link>
+
+              <Link
+                href="/workbench"
+                style={{
+                  textDecoration: "none",
+                  padding: "12px 16px",
+                  borderRadius: 14,
+                  background: "rgba(255,255,255,0.06)",
+                  border: `1px solid ${border}`,
+                  color: ink,
+                  fontWeight: 950,
+                }}
+              >
+                Workbench
               </Link>
 
               <Link
@@ -236,8 +288,14 @@ export default function LandingHero() {
             </div>
           </div>
 
-          {/* Feature cards */}
-          <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14 }}>
+          <div
+            style={{
+              marginTop: 18,
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: 14,
+            }}
+          >
             {FEATURES.map((f) => (
               <div
                 key={f.title}
@@ -249,8 +307,19 @@ export default function LandingHero() {
                   boxShadow: "0 18px 40px rgba(0,0,0,0.40)",
                 }}
               >
-                <div style={{ fontWeight: 950, fontSize: 18, color: ink }}>{f.title}</div>
-                <div style={{ marginTop: 6, color: inkSoft, fontSize: 13, fontWeight: 650 }}>{f.subtitle}</div>
+                <div style={{ fontWeight: 950, fontSize: 18, color: ink }}>
+                  {f.title}
+                </div>
+                <div
+                  style={{
+                    marginTop: 6,
+                    color: inkSoft,
+                    fontSize: 13,
+                    fontWeight: 650,
+                  }}
+                >
+                  {f.subtitle}
+                </div>
               </div>
             ))}
           </div>

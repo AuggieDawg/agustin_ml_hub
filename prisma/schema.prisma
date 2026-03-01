@@ -15,13 +15,11 @@ enum TaskScope {
   OWNER
 }
 
-
 datasource db {
   provider = "postgresql"
   // Prisma v7 + prisma.config.ts:
   // The connection URL is configured in prisma.config.ts, not here.
 }
-
 
 enum Role {
   // Role-Based Access Control (RBAC):
@@ -35,7 +33,6 @@ model User {
   /**
    * User is the canonical identity table.
    * Auth.js (NextAuth) uses this table via the Prisma Adapter.
-   *
    * Core principles:
    * - Email is unique
    * - Role determines access
@@ -43,36 +40,40 @@ model User {
    */
 
   // Primary key; cuid() is stable and collision-resistant for distributed systems.
-  id            String    @id @default(cuid())
+  id String @id @default(cuid())
 
   // Unique email for identity and login.
-  email         String    @unique
+  email String @unique
 
   // Null if not verified. Google login usually makes this non-null.
   emailVerified DateTime?
 
   // Optional fields populated by OAuth provider.
-  name          String?
-  image         String?
+  name  String?
+  image String?
 
   // RBAC role. Defaults to USER, then we promote your email to ADMIN.
-  role          Role      @default(USER)
+  role Role @default(USER)
 
   // 1:1 profile (optional). Kept separate to avoid bloating core auth identity.
-  profile       Profile?
+  profile Profile?
 
   // 1:many tasks owned by user.
-  tasks         Task[]
+  tasks Task[]
 
   // Auth.js adapter relations:
   // - accounts: holds provider links (e.g., google)
   // - sessions: holds DB sessions if using strategy: "database"
-  accounts      Account[]
-  sessions      Session[]
+  accounts Account[]
+  sessions Session[]
 
   // Auditing timestamps:
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Workbench namespace relations (explicitly named to avoid ambiguity)
+  workbenchTasks        WorkbenchTask[]        @relation("WorkbenchTaskOwner")
+  workbenchTaskComments WorkbenchTaskComment[] @relation("WorkbenchTaskCommentAuthor")
 }
 
 model Profile {
@@ -83,16 +84,16 @@ model Profile {
    * - keep identity model clean
    */
 
-  id        String   @id @default(cuid())
+  id String @id @default(cuid())
 
   // Unique userId enforces exactly one profile per user.
-  userId    String   @unique
+  userId String @unique
 
   // Relation to User. Cascade delete prevents orphan profiles.
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Example field. You can add more later (company, preferences, etc.)
-  bio       String?
+  bio String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -105,7 +106,6 @@ model Task {
    * - auth session identifies user
    * - backend writes data scoped to userId
    * - frontend reads only that user’s objects
-   *
    * Later, this same pattern will be reused for:
    * - ML tool runs
    * - datasets
@@ -113,21 +113,21 @@ model Task {
    * - reports
    */
 
-  id        String   @id @default(cuid())
+  id String @id @default(cuid())
 
   // Foreign key that scopes ownership.
-  userId    String
+  userId String
 
   // Relation to user. Cascade delete cleans up tasks if user removed.
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   title     String
-  completed Boolean  @default(false) // NEW: task completion
+  completed Boolean @default(false) // NEW: task completion
   // Keep as string now to move fast. You can convert to enum later.
-  status    String   @default("todo")
+  status    String  @default("todo")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   scope     TaskScope @default(PORTAL) // ✅ NEW: separates PORTAL vs OWNER tasks
 
   // Index accelerates "fetch tasks for user" queries.
@@ -142,46 +142,45 @@ model Task {
  * https://authjs.dev/reference/adapter/prisma
  */
 model Account {
-  id                String  @id @default(cuid())
+  id String @id @default(cuid())
 
   // Links this provider account to a user in your system.
-  userId            String
+  userId String
 
   // Usually "oauth"
-  type              String
+  type String
 
   // Provider name e.g. "google"
-  provider          String
+  provider String
 
   // Unique account identifier provided by the provider.
   providerAccountId String
 
   // Token fields depend on provider and scopes.
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
+  refresh_token String?
+  access_token  String?
+  expires_at    Int?
+  token_type    String?
+  scope         String?
+  id_token      String?
+  session_state String?
 
   // Relation back to User. Cascade delete removes provider links on user deletion.
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Prevent duplicates for the same provider identity.
   @@unique([provider, providerAccountId])
-
   @@index([userId])
 }
 
 model Session {
-  id           String   @id @default(cuid())
+  id String @id @default(cuid())
 
   // Token stored in cookies to find session in DB.
-  sessionToken String   @unique
+  sessionToken String @unique
 
-  userId       String
-  expires      DateTime
+  userId  String
+  expires DateTime
 
   // Relation back to user; cascade cleanup.
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -199,4 +198,49 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+enum WorkbenchTaskStatus {
+  Open
+  InProgress
+  Review
+  Completed
+  Overdue
+}
+
+enum WorkbenchTaskPriority {
+  Low
+  Medium
+  High
+}
+
+model WorkbenchTask {
+  id       String                @id @default(cuid())
+  title    String
+  client   String
+  dueDate  DateTime?
+  assignee String
+  status   WorkbenchTaskStatus   @default(Open)
+  priority WorkbenchTaskPriority @default(Medium)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // optional: link to user if you want ownership/audit
+  ownerId String?
+  owner   User?   @relation("WorkbenchTaskOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  comments WorkbenchTaskComment[]
+}
+
+model WorkbenchTaskComment {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+
+  taskId String
+  task   WorkbenchTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   User?   @relation("WorkbenchTaskCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
 }
