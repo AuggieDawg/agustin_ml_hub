@@ -74,8 +74,9 @@ model User {
   // Workbench namespace relations (explicitly named to avoid ambiguity)
   workbenchTasks        WorkbenchTask[]        @relation("WorkbenchTaskOwner")
   workbenchTaskComments WorkbenchTaskComment[] @relation("WorkbenchTaskCommentAuthor")
+  workbenchTaskLinks    WorkbenchTaskLink[]    @relation("WorkbenchTaskLinkOwner")
 
-  //Map-boxes
+  // Map-boxes
   mapBoxes MapBox[] @relation("UserMapBoxes")
 }
 
@@ -226,14 +227,40 @@ model WorkbenchTask {
   status   WorkbenchTaskStatus   @default(Open)
   priority WorkbenchTaskPriority @default(Medium)
 
+  // persisted map layout
+  mapX Float @default(40)
+  mapY Float @default(40)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // optional: link to user if you want ownership/audit
   ownerId String?
-  owner   User?   @relation("WorkbenchTaskOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  owner   User? @relation("WorkbenchTaskOwner", fields: [ownerId], references: [id], onDelete: SetNull)
 
-  comments WorkbenchTaskComment[]
+  comments      WorkbenchTaskComment[]
+  outgoingLinks WorkbenchTaskLink[] @relation("WorkbenchTaskLinkSource")
+  incomingLinks WorkbenchTaskLink[] @relation("WorkbenchTaskLinkTarget")
+
+  @@index([ownerId])
+  @@index([ownerId, status])
+  @@index([ownerId, updatedAt])
+}
+
+model WorkbenchTaskLink {
+  id           String   @id @default(cuid())
+  ownerId      String
+  sourceTaskId String
+  targetTaskId String
+  createdAt    DateTime @default(now())
+
+  owner      User          @relation("WorkbenchTaskLinkOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  sourceTask WorkbenchTask @relation("WorkbenchTaskLinkSource", fields: [sourceTaskId], references: [id], onDelete: Cascade)
+  targetTask WorkbenchTask @relation("WorkbenchTaskLinkTarget", fields: [targetTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, sourceTaskId, targetTaskId])
+  @@index([ownerId])
+  @@index([sourceTaskId])
+  @@index([targetTaskId])
 }
 
 model WorkbenchTaskComment {

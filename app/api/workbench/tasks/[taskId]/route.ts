@@ -2,6 +2,11 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAdmin } from "@/lib/auth/require";
 import { jsonError, jsonOk } from "@/lib/http/json";
 
+function parseFiniteNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ taskId: string }> }
@@ -37,8 +42,21 @@ export async function PATCH(
   if (body.assignee !== undefined) data.assignee = String(body.assignee).trim();
   if (body.status !== undefined) data.status = body.status;
   if (body.priority !== undefined) data.priority = body.priority;
+
   if (body.dueDate !== undefined) {
     data.dueDate = body.dueDate ? new Date(body.dueDate) : null;
+  }
+
+  if (body.mapX !== undefined) {
+    const mapX = parseFiniteNumber(body.mapX);
+    if (mapX === null) return jsonError(400, "mapX must be a finite number");
+    data.mapX = mapX;
+  }
+
+  if (body.mapY !== undefined) {
+    const mapY = parseFiniteNumber(body.mapY);
+    if (mapY === null) return jsonError(400, "mapY must be a finite number");
+    data.mapY = mapY;
   }
 
   const updated = await prisma.workbenchTask.update({

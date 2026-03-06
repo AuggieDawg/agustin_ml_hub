@@ -1,14 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Plus, SlidersHorizontal, LayoutGrid, Network } from "lucide-react";
 
 import { WorkbenchTabs } from "./WorkbenchTabs";
 import { TaskTable } from "./TaskTable";
-import { TaskDetail, WorkbenchTaskDTO } from "./TaskDetail";
+import { TaskDetail } from "./TaskDetail";
 import { RelationshipMap } from "./RelationshipMap";
 import { InspectorPanel } from "./InspectorPanel";
 import { TaskEditorModal } from "./TaskEditorModal";
+import type { WorkbenchTaskDTO, WorkbenchTaskLinkDTO } from "./types";
+
+type WorkbenchTaskUpsert = Omit<WorkbenchTaskDTO, "id" | "mapX" | "mapY">;
+
+type TasksResponse = {
+  tasks: any[];
+  links: any[];
+};
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -20,9 +28,32 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+function mapTask(task: any): WorkbenchTaskDTO {
+  return {
+    id: task.id,
+    title: task.title,
+    client: task.client,
+    dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : null,
+    assignee: task.assignee,
+    status: task.status,
+    priority: task.priority,
+    mapX: typeof task.mapX === "number" ? task.mapX : 40,
+    mapY: typeof task.mapY === "number" ? task.mapY : 40,
+  };
+}
+
+function mapLink(link: any): WorkbenchTaskLinkDTO {
+  return {
+    id: link.id,
+    sourceTaskId: link.sourceTaskId,
+    targetTaskId: link.targetTaskId,
+  };
+}
+
 export default function WorkbenchView() {
   const [loading, setLoading] = useState(true);
   const [tasksRaw, setTasksRaw] = useState<WorkbenchTaskDTO[]>([]);
+  const [linksRaw, setLinksRaw] = useState<WorkbenchTaskLinkDTO[]>([]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<WorkbenchTaskDTO["status"] | "All">("All");
   const [selectedId, setSelectedId] = useState<string>("");
@@ -31,37 +62,48 @@ export default function WorkbenchView() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<"create" | "edit">("create");
 
-  const selected = useMemo(
-    () => tasksRaw.find((t) => t.id === selectedId) ?? tasksRaw[0],
-    [tasksRaw, selectedId]
-  );
+  const loadWorkbench = useCallback(async () => {
+    const { tasks, links } = await api<TasksResponse>("/api/workbench/tasks");
+    const mappedTasks = tasks.map(mapTask);
+    const mappedLinks = links.map(mapLink);
+
+    setTasksRaw(mappedTasks);
+    setLinksRaw(mappedLinks);
+    setSelectedId((prev) => prev || mappedTasks[0]?.id || "");
+  }, []);
 
   useEffect(() => {
     let mounted = true;
+
     (async () => {
       try {
         setLoading(true);
-        const { tasks } = await api<{ tasks: any[] }>("/api/workbench/tasks");
-        const mapped: WorkbenchTaskDTO[] = tasks.map((t) => ({
-          id: t.id,
-          title: t.title,
-          client: t.client,
-          dueDate: t.dueDate ? new Date(t.dueDate).toISOString().slice(0, 10) : null,
-          assignee: t.assignee,
-          status: t.status,
-          priority: t.priority,
-        }));
+        const { tasks, links } = await api<TasksResponse>("/api/workbench/tasks");
+
         if (!mounted) return;
-        setTasksRaw(mapped);
-        setSelectedId((prev) => prev || mapped[0]?.id || "");
+
+        const mappedTasks = tasks.map(mapTask);
+        const mappedLinks = links.map(mapLink);
+
+        setTasksRaw(mappedTasks);
+        setLinksRaw(mappedLinks);
+        setSelectedId((prev) => prev || mappedTasks[0]?.id || "");
+      } catch (error) {
+        console.error("Failed to load workbench", error);
       } finally {
         if (mounted) setLoading(false);
       }
     })();
+
     return () => {
       mounted = false;
     };
   }, []);
+
+  const selected = useMemo(
+    () => tasksRaw.find((t) => t.id === selectedId) ?? tasksRaw[0],
+    [tasksRaw, selectedId]
+  );
 
   const tasks = useMemo(() => {
     return tasksRaw
@@ -77,6 +119,15 @@ export default function WorkbenchView() {
       });
   }, [tasksRaw, query, statusFilter]);
 
+  const visibleTaskIds = useMemo(() => new Set(tasks.map((task) => task.id)), [tasks]);
+
+  const visibleLinks = useMemo(() => {
+    return linksRaw.filter(
+      (link) =>
+        visibleTaskIds.has(link.sourceTaskId) && visibleTaskIds.has(link.targetTaskId)
+    );
+  }, [linksRaw, visibleTaskIds]);
+
   const openCreate = () => {
     setEditorMode("create");
     setEditorOpen(true);
@@ -88,7 +139,7 @@ export default function WorkbenchView() {
     setEditorOpen(true);
   };
 
-  const createTask = async (payload: Omit<WorkbenchTaskDTO, "id">) => {
+  const createTask = async (payload: WorkbenchTaskUpsert) => {
     const { task } = await api<{ task: any }>("/api/workbench/tasks", {
       method: "POST",
       body: JSON.stringify({
@@ -97,21 +148,13 @@ export default function WorkbenchView() {
       }),
     });
 
-    const mapped: WorkbenchTaskDTO = {
-      id: task.id,
-      title: task.title,
-      client: task.client,
-      dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : null,
-      assignee: task.assignee,
-      status: task.status,
-      priority: task.priority,
-    };
+    const mapped = mapTask(task);
 
     setTasksRaw((prev) => [mapped, ...prev]);
     setSelectedId(mapped.id);
   };
 
-  const updateTask = async (taskId: string, patch: Partial<Omit<WorkbenchTaskDTO, "id">>) => {
+  const updateTask = async (taskId: string, patch: Partial<WorkbenchTaskUpsert>) => {
     const { task } = await api<{ task: any }>(`/api/workbench/tasks/${taskId}`, {
       method: "PATCH",
       body: JSON.stringify({
@@ -120,26 +163,70 @@ export default function WorkbenchView() {
       }),
     });
 
+    const mapped = mapTask(task);
+
     setTasksRaw((prev) =>
-      prev.map((t) =>
-        t.id === taskId
-          ? {
-              ...t,
-              title: task.title,
-              client: task.client,
-              assignee: task.assignee,
-              status: task.status,
-              priority: task.priority,
-              dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : null,
-            }
-          : t
-      )
+      prev.map((existing) => (existing.id === taskId ? mapped : existing))
     );
+  };
+
+  const updateTaskPosition = async (taskId: string, mapX: number, mapY: number) => {
+    setTasksRaw((prev) =>
+      prev.map((task) => (task.id === taskId ? { ...task, mapX, mapY } : task))
+    );
+
+    try {
+      await api<{ task: any }>(`/api/workbench/tasks/${taskId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ mapX, mapY }),
+      });
+    } catch (error) {
+      console.error("Failed to persist task position", error);
+      await loadWorkbench();
+    }
+  };
+
+  const createLink = async (sourceTaskId: string, targetTaskId: string) => {
+    const { link } = await api<{ link: any }>("/api/workbench/task-links", {
+      method: "POST",
+      body: JSON.stringify({ sourceTaskId, targetTaskId }),
+    });
+
+    const mapped = mapLink(link);
+
+    setLinksRaw((prev) => {
+      const exists = prev.some(
+        (existing) =>
+          existing.id === mapped.id ||
+          (existing.sourceTaskId === mapped.sourceTaskId &&
+            existing.targetTaskId === mapped.targetTaskId)
+      );
+
+      return exists ? prev : [...prev, mapped];
+    });
+  };
+
+  const deleteLink = async (linkId: string) => {
+    const previous = linksRaw;
+    setLinksRaw((prev) => prev.filter((link) => link.id !== linkId));
+
+    try {
+      await api(`/api/workbench/task-links/${linkId}`, { method: "DELETE" });
+    } catch (error) {
+      console.error("Failed to delete link", error);
+      setLinksRaw(previous);
+    }
   };
 
   const deleteTask = async (taskId: string) => {
     await api(`/api/workbench/tasks/${taskId}`, { method: "DELETE" });
-    setTasksRaw((prev) => prev.filter((t) => t.id !== taskId));
+
+    setTasksRaw((prev) => prev.filter((task) => task.id !== taskId));
+    setLinksRaw((prev) =>
+      prev.filter(
+        (link) => link.sourceTaskId !== taskId && link.targetTaskId !== taskId
+      )
+    );
     setSelectedId((prev) => (prev === taskId ? "" : prev));
   };
 
@@ -202,7 +289,7 @@ export default function WorkbenchView() {
       </div>
 
       <div className="grid h-[calc(100%-110px)] grid-cols-12 gap-3 p-4">
-        <div className="col-span-12 lg:col-span-7 xl:col-span-8 flex min-h-0 flex-col gap-3">
+        <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-7 xl:col-span-8">
           <div className="rounded-2xl border border-white/10 bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.04)]">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <div className="flex items-center gap-2 text-sm text-white/80">
@@ -230,12 +317,20 @@ export default function WorkbenchView() {
           </div>
         </div>
 
-        <div className="col-span-12 lg:col-span-5 xl:col-span-4 flex min-h-0 flex-col gap-3">
+        <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-5 xl:col-span-4">
           <div className="min-h-0 rounded-2xl border border-white/10 bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.04)]">
             <WorkbenchTabs value={rightTab} onChange={setRightTab} />
             <div className="h-[520px] p-3">
               {rightTab === "Map" ? (
-                <RelationshipMap selectedTaskId={selected?.id ?? ""} />
+                <RelationshipMap
+                  tasks={tasks}
+                  links={visibleLinks}
+                  selectedTaskId={selected?.id ?? ""}
+                  onSelectTask={setSelectedId}
+                  onMoveTask={updateTaskPosition}
+                  onCreateLink={createLink}
+                  onDeleteLink={deleteLink}
+                />
               ) : rightTab === "Timeline" ? (
                 <div className="h-full rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
                   Timeline placeholder.
