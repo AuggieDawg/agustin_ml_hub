@@ -15,7 +15,7 @@
  */
 
 import NextAuth from "next-auth";
-import { authOptions } from "@/lib/auth/auth";
+import { authOptions } from "@/auth";
 
 /**
  * The handler function returned by NextAuth implements the entire /api/auth/*

@@ -1,35 +1,76 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
+import { requireAdmin } from "@/lib/auth/require";
+import { jsonCreated, jsonError, jsonOk } from "@/lib/http/json";
 
-export async function GET(_: Request, { params }: { params: { taskId: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(
+  _: Request,
+  { params }: { params: Promise<{ taskId: string }> }
+) {
+  const auth = await requireAdmin();
+  if (auth instanceof Response) return auth;
+
+  const { taskId } = await params;
+
+  const task = await prisma.workbenchTask.findFirst({
+    where: {
+      id: taskId,
+      ownerId: auth.userId,
+    },
+    select: { id: true },
+  });
+
+  if (!task) {
+    return jsonError(404, "Task not found");
+  }
 
   const comments = await prisma.workbenchTaskComment.findMany({
-    where: { taskId: params.taskId },
+    where: { taskId },
     orderBy: { createdAt: "asc" },
   });
 
-  return NextResponse.json({ comments });
+  return jsonOk({ comments });
 }
 
-export async function POST(req: Request, { params }: { params: { taskId: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ taskId: string }> }
+) {
+  const auth = await requireAdmin();
+  if (auth instanceof Response) return auth;
 
-  const body = await req.json();
+  const { taskId } = await params;
+
+  const task = await prisma.workbenchTask.findFirst({
+    where: {
+      id: taskId,
+      ownerId: auth.userId,
+    },
+    select: { id: true },
+  });
+
+  if (!task) {
+    return jsonError(404, "Task not found");
+  }
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonError(400, "Invalid JSON body");
+  }
+
   const text = String(body.body ?? "").trim();
-  if (!text) return NextResponse.json({ error: "Empty comment" }, { status: 400 });
+  if (!text) {
+    return jsonError(400, "Comment body is required");
+  }
 
   const created = await prisma.workbenchTaskComment.create({
     data: {
-      taskId: params.taskId,
+      taskId,
       body: text,
-      authorId: (session.user as any).id ?? null,
+      authorId: auth.userId,
     },
   });
 
-  return NextResponse.json({ comment: created }, { status: 201 });
+  return jsonCreated({ comment: created });
 }

@@ -74,6 +74,9 @@ model User {
   // Workbench namespace relations (explicitly named to avoid ambiguity)
   workbenchTasks        WorkbenchTask[]        @relation("WorkbenchTaskOwner")
   workbenchTaskComments WorkbenchTaskComment[] @relation("WorkbenchTaskCommentAuthor")
+
+  //Map-boxes
+  mapBoxes MapBox[] @relation("UserMapBoxes")
 }
 
 model Profile {
@@ -243,4 +246,19 @@ model WorkbenchTaskComment {
 
   authorId String?
   author   User?   @relation("WorkbenchTaskCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+}
+
+model MapBox {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation("UserMapBoxes", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, order])
 }

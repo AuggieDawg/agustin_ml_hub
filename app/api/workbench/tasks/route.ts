@@ -1,32 +1,36 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { prisma } from "@/lib/prisma";
-// ✅ Change this to your real authOptions export path:
-import { authOptions } from "@/lib/auth/auth";
+import { prisma } from "@/lib/db/prisma";
+import { requireAdmin } from "@/lib/auth/require";
+import { jsonCreated, jsonError, jsonOk } from "@/lib/http/json";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAdmin();
+  if (auth instanceof Response) return auth;
 
   const tasks = await prisma.workbenchTask.findMany({
+    where: { ownerId: auth.userId },
     orderBy: { updatedAt: "desc" },
   });
 
-  return NextResponse.json({ tasks });
+  return jsonOk({ tasks });
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAdmin();
+  if (auth instanceof Response) return auth;
 
-  const body = await req.json();
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonError(400, "Invalid JSON body");
+  }
 
   const title = String(body.title ?? "").trim();
   const client = String(body.client ?? "").trim();
   const assignee = String(body.assignee ?? "").trim();
 
   if (!title || !client || !assignee) {
-    return NextResponse.json({ error: "title, client, and assignee are required" }, { status: 400 });
+    return jsonError(400, "title, client, and assignee are required");
   }
 
   const created = await prisma.workbenchTask.create({
@@ -37,9 +41,9 @@ export async function POST(req: Request) {
       status: body.status ?? "Open",
       priority: body.priority ?? "Medium",
       dueDate: body.dueDate ? new Date(body.dueDate) : null,
-      ownerId: (session.user as any).id ?? null,
+      ownerId: auth.userId,
     },
   });
 
-  return NextResponse.json({ task: created }, { status: 201 });
+  return jsonCreated({ task: created });
 }

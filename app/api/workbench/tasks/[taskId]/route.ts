@@ -1,38 +1,78 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
+import { requireAdmin } from "@/lib/auth/require";
+import { jsonError, jsonOk } from "@/lib/http/json";
 
-export async function PATCH(req: Request, { params }: { params: { taskId: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ taskId: string }> }
+) {
+  const auth = await requireAdmin();
+  if (auth instanceof Response) return auth;
 
-  const body = await req.json();
+  const { taskId } = await params;
 
-  const updated = await prisma.workbenchTask.update({
-    where: { id: params.taskId },
-    data: {
-      title: body.title !== undefined ? String(body.title).trim() : undefined,
-      client: body.client !== undefined ? String(body.client).trim() : undefined,
-      assignee: body.assignee !== undefined ? String(body.assignee).trim() : undefined,
-      status: body.status !== undefined ? body.status : undefined,
-      priority: body.priority !== undefined ? body.priority : undefined,
-      dueDate:
-        body.dueDate !== undefined
-          ? body.dueDate
-            ? new Date(body.dueDate)
-            : null
-          : undefined,
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonError(400, "Invalid JSON body");
+  }
+
+  const existing = await prisma.workbenchTask.findFirst({
+    where: {
+      id: taskId,
+      ownerId: auth.userId,
     },
+    select: { id: true },
   });
 
-  return NextResponse.json({ task: updated });
+  if (!existing) {
+    return jsonError(404, "Task not found");
+  }
+
+  const data: any = {};
+
+  if (body.title !== undefined) data.title = String(body.title).trim();
+  if (body.client !== undefined) data.client = String(body.client).trim();
+  if (body.assignee !== undefined) data.assignee = String(body.assignee).trim();
+  if (body.status !== undefined) data.status = body.status;
+  if (body.priority !== undefined) data.priority = body.priority;
+  if (body.dueDate !== undefined) {
+    data.dueDate = body.dueDate ? new Date(body.dueDate) : null;
+  }
+
+  const updated = await prisma.workbenchTask.update({
+    where: { id: taskId },
+    data,
+  });
+
+  return jsonOk({ task: updated });
 }
 
-export async function DELETE(_: Request, { params }: { params: { taskId: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function DELETE(
+  _: Request,
+  { params }: { params: Promise<{ taskId: string }> }
+) {
+  const auth = await requireAdmin();
+  if (auth instanceof Response) return auth;
 
-  await prisma.workbenchTask.delete({ where: { id: params.taskId } });
-  return NextResponse.json({ ok: true });
+  const { taskId } = await params;
+
+  const existing = await prisma.workbenchTask.findFirst({
+    where: {
+      id: taskId,
+      ownerId: auth.userId,
+    },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    return jsonError(404, "Task not found");
+  }
+
+  await prisma.workbenchTask.delete({
+    where: { id: taskId },
+  });
+
+  return jsonOk({ ok: true });
 }
