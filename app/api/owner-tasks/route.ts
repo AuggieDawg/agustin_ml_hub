@@ -1,48 +1,45 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { requireAdmin } from "@/lib/auth/require";
+import { jsonCreated, jsonError, jsonOk } from "@/lib/http/json";
 
 export const runtime = "nodejs";
 
-function requireAdmin(session: any) {
-  const role = (session?.user as any)?.role;
-  return role === "ADMIN";
-}
-
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!requireAdmin(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-  const userId = (session.user as any).id as string;
+  const auth = await requireAdmin();
+  if (auth instanceof Response) return auth;
 
   const tasks = await prisma.task.findMany({
-    where: { userId, scope: "OWNER" },
-    orderBy: { createdAt: "desc" },
-  });
-
-  return NextResponse.json({ tasks }, { status: 200 });
-}
-
-export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!requireAdmin(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-  const userId = (session.user as any).id as string;
-
-  const body = await req.json().catch(() => null);
-  const title = typeof body?.title === "string" ? body.title.trim() : "";
-  if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
-
-  const task = await prisma.task.create({
-    data: {
-      title,
-      userId,
+    where: {
+      userId: auth.userId,
       scope: "OWNER",
+    },
+    orderBy: {
+      createdAt: "desc",
     },
   });
 
-  return NextResponse.json({ task }, { status: 201 });
+  return jsonOk({ tasks });
+}
+
+export async function POST(req: Request) {
+  const auth = await requireAdmin();
+  if (auth instanceof Response) return auth;
+
+  const body = await req.json().catch(() => null);
+  const title = typeof body?.title === "string" ? body.title.trim() : "";
+
+  if (!title) {
+    return jsonError(400, "Title is required");
+  }
+
+  const task = await prisma.task.create({
+    data: {
+      userId: auth.userId,
+      title,
+      scope: "OWNER",
+      completed: false,
+    },
+  });
+
+  return jsonCreated({ task });
 }

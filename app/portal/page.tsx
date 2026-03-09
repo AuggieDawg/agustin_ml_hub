@@ -1,5 +1,5 @@
-import PortalDashboard from "@/components/portal/PortalDashboard";
+import { redirect } from "next/navigation";
 
 export default function PortalPage() {
-  return <PortalDashboard />;
+  redirect("/client");
 }

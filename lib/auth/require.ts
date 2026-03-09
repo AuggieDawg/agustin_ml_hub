@@ -1,5 +1,5 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/auth";
+import { auth } from "@/auth";
+import { isAdmin } from "@/lib/auth/rbac";
 import { jsonError } from "@/lib/http/json";
 
 export type RequireAuthResult = {
@@ -8,14 +8,10 @@ export type RequireAuthResult = {
 };
 
 export async function requireAuth(): Promise<RequireAuthResult | Response> {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
 
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return jsonError(401, "Unauthorized");
-  }
-
-  if (!session.user.id) {
-    return jsonError(500, "Session missing user.id");
   }
 
   return {
@@ -31,7 +27,7 @@ export async function requireAdmin(): Promise<RequireAuthResult | Response> {
     return result;
   }
 
-  if (result.role !== "ADMIN") {
+  if (!isAdmin(result.role)) {
     return jsonError(403, "Forbidden");
   }
 

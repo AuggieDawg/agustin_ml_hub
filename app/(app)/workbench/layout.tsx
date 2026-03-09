@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 import { isAdmin } from "@/lib/auth/rbac";
 import { Sidebar } from "@/components/layout/Sidebar";
 
-export default async function OwnerLayout({
+export default async function WorkbenchLayout({
   children,
 }: {
   children: ReactNode;

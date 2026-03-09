@@ -1,67 +1,78 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { requireAdmin } from "@/lib/auth/require";
+import { jsonError, jsonOk } from "@/lib/http/json";
 
 export const runtime = "nodejs";
 
-type Context = { params: Promise<{ id: string }> };
+type TaskRouteContext = {
+  params: Promise<{ id: string }>;
+};
 
-function requireAdmin(session: any) {
-  const role = (session?.user as any)?.role;
-  return role === "ADMIN";
-}
+export async function PATCH(req: Request, ctx: TaskRouteContext) {
+  const auth = await requireAdmin();
+  if (auth instanceof Response) return auth;
 
-export async function PATCH(req: Request, context: Context) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!requireAdmin(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { id } = await ctx.params;
 
-  const userId = (session.user as any).id as string;
-  const { id } = await context.params;
+  const existing = await prisma.task.findFirst({
+    where: {
+      id,
+      userId: auth.userId,
+      scope: "OWNER",
+    },
+  });
 
-  if (!id) return NextResponse.json({ error: "Invalid task id" }, { status: 400 });
+  if (!existing) {
+    return jsonError(404, "Task not found");
+  }
 
   const body = await req.json().catch(() => null);
-
   const data: { title?: string; completed?: boolean } = {};
-  if (typeof body?.title === "string") {
-    const trimmed = body.title.trim();
-    if (!trimmed) return NextResponse.json({ error: "Invalid title" }, { status: 400 });
-    data.title = trimmed;
+
+  if (body?.title !== undefined) {
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    if (!title) {
+      return jsonError(400, "Title must be a non-empty string");
+    }
+    data.title = title;
   }
-  if (typeof body?.completed === "boolean") data.completed = body.completed;
+
+  if (body?.completed !== undefined) {
+    if (typeof body.completed !== "boolean") {
+      return jsonError(400, "completed must be a boolean");
+    }
+    data.completed = body.completed;
+  }
 
   if (Object.keys(data).length === 0) {
-    return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    return jsonError(400, "Nothing to update");
   }
 
-  const updated = await prisma.task.updateMany({
-    where: { id, userId, scope: "OWNER" },
+  const task = await prisma.task.update({
+    where: { id: existing.id },
     data,
   });
 
-  if (updated.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  const task = await prisma.task.findFirst({ where: { id, userId, scope: "OWNER" } });
-  return NextResponse.json({ task }, { status: 200 });
+  return jsonOk({ task });
 }
 
-export async function DELETE(_req: Request, context: Context) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!requireAdmin(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+export async function DELETE(_req: Request, ctx: TaskRouteContext) {
+  const auth = await requireAdmin();
+  if (auth instanceof Response) return auth;
 
-  const userId = (session.user as any).id as string;
-  const { id } = await context.params;
+  const { id } = await ctx.params;
 
-  if (!id) return NextResponse.json({ error: "Invalid task id" }, { status: 400 });
-
-  const deleted = await prisma.task.deleteMany({
-    where: { id, userId, scope: "OWNER" },
+  const result = await prisma.task.deleteMany({
+    where: {
+      id,
+      userId: auth.userId,
+      scope: "OWNER",
+    },
   });
 
-  if (deleted.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (result.count === 0) {
+    return jsonError(404, "Task not found");
+  }
 
-  return NextResponse.json({ ok: true }, { status: 200 });
+  return jsonOk({ ok: true });
 }
