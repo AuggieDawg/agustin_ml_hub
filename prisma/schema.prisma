@@ -1,18 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  // Generates the Prisma client that you import in your application code.
-  // This is how your Next.js server talks to Postgres with type safety.
   provider = "prisma-client-js"
-}
-
-enum TaskScope {
-  PORTAL
-  OWNER
 }
 
 datasource db {
@@ -21,187 +8,14 @@ datasource db {
   // The connection URL is configured in prisma.config.ts, not here.
 }
 
+enum TaskScope {
+  PORTAL
+  OWNER
+}
+
 enum Role {
-  // Role-Based Access Control (RBAC):
-  // - USER: normal registered user
-  // - ADMIN: you (site owner) who can access private portal and private tools
   USER
   ADMIN
-}
-
-model User {
-  /**
-   * User is the canonical identity table.
-   * Auth.js (NextAuth) uses this table via the Prisma Adapter.
-   * Core principles:
-   * - Email is unique
-   * - Role determines access
-   * - Other objects (Profile, Task, ToolRuns, etc.) attach to User by foreign key
-   */
-
-  // Primary key; cuid() is stable and collision-resistant for distributed systems.
-  id String @id @default(cuid())
-
-  // Unique email for identity and login.
-  email String @unique
-
-  // Null if not verified. Google login usually makes this non-null.
-  emailVerified DateTime?
-
-  // Optional fields populated by OAuth provider.
-  name  String?
-  image String?
-
-  // RBAC role. Defaults to USER, then we promote your email to ADMIN.
-  role Role @default(USER)
-
-  // 1:1 profile (optional). Kept separate to avoid bloating core auth identity.
-  profile Profile?
-
-  // 1:many tasks owned by user.
-  tasks Task[]
-
-  // Auth.js adapter relations:
-  // - accounts: holds provider links (e.g., google)
-  // - sessions: holds DB sessions if using strategy: "database"
-  accounts Account[]
-  sessions Session[]
-
-  // Auditing timestamps:
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Workbench namespace relations (explicitly named to avoid ambiguity)
-  workbenchTasks        WorkbenchTask[]        @relation("WorkbenchTaskOwner")
-  workbenchTaskComments WorkbenchTaskComment[] @relation("WorkbenchTaskCommentAuthor")
-  workbenchTaskLinks    WorkbenchTaskLink[]    @relation("WorkbenchTaskLinkOwner")
-
-  // Map-boxes
-  mapBoxes MapBox[] @relation("UserMapBoxes")
-}
-
-model Profile {
-  /**
-   * Profile is user metadata you control.
-   * This allows you to:
-   * - extend user data without touching auth-sensitive columns
-   * - keep identity model clean
-   */
-
-  id String @id @default(cuid())
-
-  // Unique userId enforces exactly one profile per user.
-  userId String @unique
-
-  // Relation to User. Cascade delete prevents orphan profiles.
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Example field. You can add more later (company, preferences, etc.)
-  bio String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Task {
-  /**
-   * Task is our first "user-owned object".
-   * This proves:
-   * - auth session identifies user
-   * - backend writes data scoped to userId
-   * - frontend reads only that user’s objects
-   * Later, this same pattern will be reused for:
-   * - ML tool runs
-   * - datasets
-   * - saved models/experiments
-   * - reports
-   */
-
-  id String @id @default(cuid())
-
-  // Foreign key that scopes ownership.
-  userId String
-
-  // Relation to user. Cascade delete cleans up tasks if user removed.
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  title     String
-  completed Boolean @default(false) // NEW: task completion
-  // Keep as string now to move fast. You can convert to enum later.
-  status    String  @default("todo")
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  scope     TaskScope @default(PORTAL) // ✅ NEW: separates PORTAL vs OWNER tasks
-
-  // Index accelerates "fetch tasks for user" queries.
-  @@index([userId])
-  @@index([userId, scope]) // ✅ NEW: efficient filtered queries
-}
-
-/**
- * Auth.js Prisma Adapter models.
- * These are required for OAuth and sessions.
- * Keep in sync with Auth.js docs:
- * https://authjs.dev/reference/adapter/prisma
- */
-model Account {
-  id String @id @default(cuid())
-
-  // Links this provider account to a user in your system.
-  userId String
-
-  // Usually "oauth"
-  type String
-
-  // Provider name e.g. "google"
-  provider String
-
-  // Unique account identifier provided by the provider.
-  providerAccountId String
-
-  // Token fields depend on provider and scopes.
-  refresh_token String?
-  access_token  String?
-  expires_at    Int?
-  token_type    String?
-  scope         String?
-  id_token      String?
-  session_state String?
-
-  // Relation back to User. Cascade delete removes provider links on user deletion.
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Prevent duplicates for the same provider identity.
-  @@unique([provider, providerAccountId])
-  @@index([userId])
-}
-
-model Session {
-  id String @id @default(cuid())
-
-  // Token stored in cookies to find session in DB.
-  sessionToken String @unique
-
-  userId  String
-  expires DateTime
-
-  // Relation back to user; cascade cleanup.
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model VerificationToken {
-  /**
-   * Used for email magic links / verification flows.
-   * Even if you don't use it today, keep it for compatibility.
-   */
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
 }
 
 enum WorkbenchTaskStatus {
@@ -218,16 +32,215 @@ enum WorkbenchTaskPriority {
   High
 }
 
-model WorkbenchTask {
-  id       String                @id @default(cuid())
-  title    String
-  client   String
-  dueDate  DateTime?
-  assignee String
-  status   WorkbenchTaskStatus   @default(Open)
-  priority WorkbenchTaskPriority @default(Medium)
+enum SecurityPropertyAccessRole {
+  Viewer
+  Operator
+  Billing
+  Admin
+}
 
-  // persisted map layout
+enum SecurityDeviceType {
+  CAMERA
+  DOOR_SENSOR
+  WINDOW_SENSOR
+  MOTION_SENSOR
+  SMOKE_DETECTOR
+  CO_DETECTOR
+  LOCK
+  PANEL
+  SIREN
+  FLOOD_SENSOR
+  OTHER
+}
+
+enum SecurityDeviceStatus {
+  UNCONFIGURED
+  ONLINE
+  WARNING
+  OFFLINE
+  MAINTENANCE
+}
+
+enum CameraTransport {
+  RTSP
+  HLS
+  WEBRTC
+  ONVIF
+  OTHER
+}
+
+enum CameraStreamKind {
+  LIVE
+  SUBSTREAM
+  RECORDING
+  SNAPSHOT
+}
+
+enum CameraStreamStatus {
+  UNCONFIGURED
+  CONNECTING
+  LIVE
+  DEGRADED
+  OFFLINE
+}
+
+enum SecurityAlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum SecurityAlertStatus {
+  Open
+  Acknowledged
+  Resolved
+}
+
+enum SecurityEventType {
+  MANUAL
+  DEVICE_HEARTBEAT
+  MOTION_DETECTED
+  DOOR_OPENED
+  DOOR_CLOSED
+  CAMERA_OFFLINE
+  CAMERA_RESTORED
+  SYSTEM_ARMED
+  SYSTEM_DISARMED
+  RECORDING_STARTED
+  RECORDING_STOPPED
+}
+
+enum ServiceTicketPriority {
+  Low
+  Medium
+  High
+  Urgent
+}
+
+enum ServiceTicketStatus {
+  Open
+  Scheduled
+  InProgress
+  Resolved
+  Closed
+}
+
+enum InvoiceStatus {
+  Draft
+  Open
+  Paid
+  Overdue
+  Void
+}
+
+enum DocumentCategory {
+  Operations
+  Support
+  Commercial
+  Warranty
+  Other
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  role          Role     @default(USER)
+
+  profile Profile?
+
+  tasks Task[]
+
+  accounts Account[]
+  sessions Session[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workbenchTasks        WorkbenchTask[]        @relation("WorkbenchTaskOwner")
+  workbenchTaskComments WorkbenchTaskComment[] @relation("WorkbenchTaskCommentAuthor")
+  workbenchTaskLinks    WorkbenchTaskLink[]    @relation("WorkbenchTaskLinkOwner")
+  mapBoxes              MapBox[]               @relation("UserMapBoxes")
+
+  securityPropertiesOwned      SecurityProperty[]       @relation("SecurityPropertyOwner")
+  securityPropertyMemberships  SecurityPropertyMember[]
+  securityAuditLogsAsActor     SecurityAuditLog[]       @relation("SecurityAuditLogActor")
+}
+
+model Profile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Task {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  completed Boolean   @default(false)
+  status    String    @default("todo")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  scope     TaskScope @default(PORTAL)
+
+  @@index([userId])
+  @@index([userId, scope])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model WorkbenchTask {
+  id        String              @id @default(cuid())
+  title     String
+  client    String
+  dueDate   DateTime?
+  assignee  String
+  status    WorkbenchTaskStatus @default(Open)
+  priority  WorkbenchTaskPriority @default(Medium)
+
   mapX Float @default(40)
   mapY Float @default(40)
 
@@ -247,7 +260,7 @@ model WorkbenchTask {
 }
 
 model WorkbenchTaskLink {
-  id           String   @id @default(cuid())
+  id           String @id @default(cuid())
   ownerId      String
   sourceTaskId String
   targetTaskId String
@@ -272,7 +285,7 @@ model WorkbenchTaskComment {
   task   WorkbenchTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   authorId String?
-  author   User?   @relation("WorkbenchTaskCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  author   User? @relation("WorkbenchTaskCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
 }
 
 model MapBox {
@@ -288,4 +301,301 @@ model MapBox {
 
   @@index([userId])
   @@index([userId, order])
+}
+
+model SecurityProperty {
+  id          String   @id @default(cuid())
+  ownerId     String
+  name        String
+  nickname    String?
+  description String?
+  siteLabel   String?
+  siteTimezone String?
+  isActive    Boolean  @default(true)
+
+  owner User @relation("SecurityPropertyOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  members        SecurityPropertyMember[]
+  zones          SecurityZone[]
+  devices        SecurityDevice[]
+  alerts         SecurityAlert[]
+  events         SecurityEvent[]
+  serviceTickets SecurityServiceTicket[]
+  invoices       SecurityInvoice[]
+  documents      SecurityDocument[]
+  auditLogs      SecurityAuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([ownerId, updatedAt])
+}
+
+model SecurityPropertyMember {
+  id         String   @id @default(cuid())
+  propertyId String
+  userId     String
+  accessRole SecurityPropertyAccessRole @default(Viewer)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property SecurityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, userId])
+  @@index([userId])
+  @@index([propertyId])
+}
+
+model SecurityZone {
+  id          String   @id @default(cuid())
+  propertyId  String
+  name        String
+  statusLabel String   @default("Not mapped")
+  sortOrder   Int      @default(0)
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property SecurityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  devices  SecurityDevice[]
+  alerts   SecurityAlert[]
+  events   SecurityEvent[]
+
+  @@index([propertyId])
+  @@index([propertyId, sortOrder])
+}
+
+model SecurityDevice {
+  id                 String   @id @default(cuid())
+  propertyId         String
+  zoneId             String?
+  name               String
+  deviceType         SecurityDeviceType
+  status             SecurityDeviceStatus @default(UNCONFIGURED)
+  manufacturer       String?
+  modelName          String?
+  serialNumber       String?
+  firmwareVersion    String?
+  ipAddress          String?
+  resolutionLabel    String?
+  preferredTransport CameraTransport?
+  supportsOnvif      Boolean  @default(false)
+  supportsRtsp       Boolean  @default(false)
+  supportsPtz        Boolean  @default(false)
+  isRecordingEnabled Boolean  @default(false)
+  installedAt        DateTime?
+  lastSeenAt         DateTime?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  property SecurityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  zone     SecurityZone?    @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+
+  streamProfiles CameraStreamProfile[]
+  healthSamples  CameraHealthSample[]
+  snapshots      Snapshot[]
+  recordingClips RecordingClip[]
+  alerts         SecurityAlert[]
+  events         SecurityEvent[]
+
+  @@index([propertyId])
+  @@index([propertyId, deviceType])
+  @@index([propertyId, status])
+  @@index([propertyId, deviceType, updatedAt])
+  @@index([zoneId])
+}
+
+model CameraStreamProfile {
+  id           String   @id @default(cuid())
+  deviceId     String
+  label        String
+  kind         CameraStreamKind   @default(LIVE)
+  transport    CameraTransport
+  status       CameraStreamStatus @default(UNCONFIGURED)
+  streamPath   String?
+  width        Int?
+  height       Int?
+  fps          Int?
+  bitrateKbps  Int?
+  codec        String?
+  isPrimary    Boolean  @default(false)
+  lastCheckedAt DateTime?
+  lastError    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  device SecurityDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([deviceId, status])
+  @@index([deviceId, kind])
+}
+
+model CameraHealthSample {
+  id            String   @id @default(cuid())
+  deviceId      String
+  isOnline      Boolean
+  latencyMs     Int?
+  bitrateKbps   Int?
+  frameRate     Float?
+  packetLossPct Float?
+  note          String?
+  capturedAt    DateTime @default(now())
+
+  device SecurityDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, capturedAt])
+}
+
+model Snapshot {
+  id         String   @id @default(cuid())
+  deviceId   String
+  storageKey String
+  previewUrl String?
+  width      Int?
+  height     Int?
+  bytes      Int?
+  capturedAt DateTime @default(now())
+
+  device SecurityDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, capturedAt])
+}
+
+model RecordingClip {
+  id         String   @id @default(cuid())
+  deviceId   String
+  storageKey String
+  previewUrl String?
+  mimeType   String?
+  bytes      Int?
+  startedAt  DateTime
+  endedAt    DateTime
+  durationSec Int?
+  createdAt  DateTime @default(now())
+
+  device SecurityDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, startedAt])
+}
+
+model SecurityAlert {
+  id         String   @id @default(cuid())
+  propertyId String
+  zoneId     String?
+  deviceId   String?
+  severity   SecurityAlertSeverity @default(INFO)
+  status     SecurityAlertStatus   @default(Open)
+  title      String
+  detail     String?
+  triggeredAt DateTime @default(now())
+  resolvedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property SecurityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  zone     SecurityZone?    @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  device   SecurityDevice?  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, status])
+  @@index([propertyId, triggeredAt])
+  @@index([zoneId])
+  @@index([deviceId])
+}
+
+model SecurityEvent {
+  id         String   @id @default(cuid())
+  propertyId String
+  zoneId     String?
+  deviceId   String?
+  eventType  SecurityEventType @default(MANUAL)
+  title      String
+  detail     String?
+  actorLabel String?
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  property SecurityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  zone     SecurityZone?    @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  device   SecurityDevice?  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, occurredAt])
+  @@index([zoneId])
+  @@index([deviceId])
+}
+
+model SecurityServiceTicket {
+  id          String   @id @default(cuid())
+  propertyId  String
+  title       String
+  detail      String?
+  priority    ServiceTicketPriority @default(Medium)
+  status      ServiceTicketStatus   @default(Open)
+  openedByLabel String?
+  scheduledFor DateTime?
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property SecurityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, status])
+  @@index([propertyId, priority])
+}
+
+model SecurityInvoice {
+  id           String   @id @default(cuid())
+  propertyId   String
+  invoiceNumber String? @unique
+  amountCents  Int
+  currency     String   @default("USD")
+  dueDate      DateTime
+  status       InvoiceStatus @default(Open)
+  issuedAt     DateTime @default(now())
+  paidAt       DateTime?
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  property SecurityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, status])
+  @@index([propertyId, dueDate])
+}
+
+model SecurityDocument {
+  id         String   @id @default(cuid())
+  propertyId String
+  name       String
+  category   DocumentCategory @default(Operations)
+  summary    String?
+  storageKey String?
+  uploadedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property SecurityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, category])
+  @@index([propertyId, uploadedAt])
+}
+
+model SecurityAuditLog {
+  id          String   @id @default(cuid())
+  propertyId  String?
+  actorUserId String?
+  entityType  String
+  entityId    String?
+  action      String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  property  SecurityProperty? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  actorUser User?             @relation("SecurityAuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, createdAt])
+  @@index([actorUserId, createdAt])
 }
