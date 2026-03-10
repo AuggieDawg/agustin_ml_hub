@@ -24,3 +24,18 @@ export type WorkbenchTaskLinkDTO = {
   sourceTaskId: string;
   targetTaskId: string;
 };
+
+export type WorkbenchShellTabId =
+  | "Workbench"
+  | "Weekly"
+  | "Timeline"
+  | "Milestones"
+  | "Notes";
+
+export const DEFAULT_WORKBENCH_SHELL_TABS: WorkbenchShellTabId[] = [
+  "Workbench",
+  "Weekly",
+  "Timeline",
+  "Milestones",
+  "Notes",
+];
